@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Question Solver</title>
+    <style>
+        :root {
+            --body-bg: #f0f2f5;
+            --chat-bg: #ffffff;
+            --user-msg-bg: #0084ff;
+            --user-msg-color: #ffffff;
+            --ai-msg-bg: #e4e6eb;
+            --ai-msg-color: #050505;
+            --text-color: #050505;
+            --border-color: #ced0d4;
+            --font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+        }
+        body {
+            font-family: var(--font-family);
+            background-color: var(--body-bg);
+            margin: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+        }
+        .chat-container {
+            width: 100%;
+            max-width: 700px;
+            height: 90vh;
+            background-color: var(--chat-bg);
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        .chat-header {
+            padding: 16px;
+            font-size: 1.2rem;
+            font-weight: bold;
+            color: var(--text-color);
+            border-bottom: 1px solid var(--border-color);
+            text-align: center;
+        }
+        .chat-messages {
+            flex-grow: 1;
+            padding: 16px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+        .message {
+            padding: 10px 15px;
+            border-radius: 18px;
+            max-width: 75%;
+            line-height: 1.4;
+        }
+        .message.user {
+            background-color: var(--user-msg-bg);
+            color: var(--user-msg-color);
+            align-self: flex-end;
+        }
+        .message.ai {
+            background-color: var(--ai-msg-bg);
+            color: var(--ai-msg-color);
+            align-self: flex-start;
+        }
+        .message.loading {
+            align-self: flex-start;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .dot-flashing {
+            position: relative;
+            width: 10px; height: 10px;
+            border-radius: 5px;
+            background-color: #999;
+            color: #999;
+            animation: dot-flashing 1s infinite linear alternate;
+            animation-delay: .5s;
+        }
+        .dot-flashing::before, .dot-flashing::after {
+            content: '';
+            display: inline-block;
+            position: absolute;
+            top: 0;
+            width: 10px; height: 10px;
+            border-radius: 5px;
+            background-color: #999;
+            color: #999;
+        }
+        .dot-flashing::before { left: -15px; animation: dot-flashing 1s infinite alternate; animation-delay: 0s; }
+        .dot-flashing::after { left: 15px; animation: dot-flashing 1s infinite alternate; animation-delay: 1s; }
+        @keyframes dot-flashing { 0% { background-color: #999; } 50%, 100% { background-color: #eee; } }
+
+        .chat-input-form {
+            display: flex;
+            padding: 16px;
+            border-top: 1px solid var(--border-color);
+        }
+        #userInput {
+            flex-grow: 1;
+            border: 1px solid var(--border-color);
+            border-radius: 18px;
+            padding: 10px 15px;
+            font-size: 1rem;
+        }
+        #userInput:focus { outline: none; border-color: var(--user-msg-bg); }
+        .chat-input-form button {
+            margin-left: 10px;
+            border: none;
+            background-color: var(--user-msg-bg);
+            color: white;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            cursor: pointer;
+            font-size: 1.5rem;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        @media (max-width: 768px) {
+            .chat-container { height: 100vh; border-radius: 0; }
+        }
+    </style>
+</head>
+<body>
+    <div class="chat-container">
+        <div class="chat-header">AI Assistant</div>
+        <div class="chat-messages" id="chatMessages">
+             <div class="message ai">Hello! How can I help you today?</div>
+        </div>
+        <form class="chat-input-form" id="chatForm">
+            <input type="text" id="userInput" placeholder="Ask a question..." autocomplete="off" required>
+            <button type="submit">➤</button>
+        </form>
+    </div>
+
+    <script>
+        const chatForm = document.getElementById('chatForm');
+        const userInput = document.getElementById('userInput');
+        const chatMessages = document.getElementById('chatMessages');
+
+        chatForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const question = userInput.value.trim();
+            if (!question) return;
+
+            // Display user's message
+            addMessage(question, 'user');
+            userInput.value = '';
+            
+            // Show loading indicator
+            const loadingIndicator = addMessage('', 'ai loading');
+            const flashingDot = document.createElement('div');
+            flashingDot.className = 'dot-flashing';
+            loadingIndicator.appendChild(flashingDot);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+
+            try {
+                // IMPORTANT: Use relative path for deployment
+                const response = await fetch('http://localhost:3000/api/ask', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ question })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                const data = await response.json();
+                
+                // Remove loading indicator and add AI response
+                loadingIndicator.remove();
+                addMessage(data.answer, 'ai');
+
+            } catch (error) {
+                console.error("Error fetching AI response:", error);
+                loadingIndicator.remove();
+                addMessage('Sorry, I encountered an error. Please try again.', 'ai');
+            }
+        });
+
+        function addMessage(text, type) {
+            const messageElement = document.createElement('div');
+            messageElement.className = `message ${type}`;
+            messageElement.textContent = text;
+            chatMessages.appendChild(messageElement);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+            return messageElement;
+        }
+    </script>
+</body>
+</html>
